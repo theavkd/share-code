@@ -3,473 +3,278 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kei & Hiro's Code Sharing Hub 🌸</title>
-    <!-- Tailwind CSS để giao diện luôn dễ thương, hiện đại -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons để có các biểu tượng trực quan -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <title>Kei & Hiro Workspace IDE</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&family=Fira+Code:wght@400;500&display=swap');
+        :root {
+            --bg-color: #1e1e1e;
+            --sidebar-bg: #252526;
+            --tab-bg: #2d2d2d;
+            --tab-active: #1e1e1e;
+            --text-color: #d4d4d4;
+            --accent-color: #9cdcfe;
+            --button-bg: #0e639c;
+        }
         body {
-            font-family: 'Quicksand', sans-serif;
-            background-color: #fff5f5;
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
         }
-        pre, code {
-            font-family: 'Fira Code', monospace;
+        /* Sidebar chứa cấu trúc thư mục (#2) */
+        #sidebar {
+            width: 250px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid #3c3c3c;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            box-sizing: border-box;
         }
-        /* Thanh cuộn dễ thương */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+        #workspace-btn {
+            background-color: var(--button-bg);
+            color: white;
+            border: none;
+            padding: 8px;
+            cursor: pointer;
+            margin-bottom: 10px;
+            font-weight: bold;
+            border-radius: 4px;
         }
-        ::-webkit-scrollbar-track {
-            background: #ffe3e3;
+        #tree-view {
+            flex: 1;
+            overflow-y: auto;
+            font-size: 14px;
         }
-        ::-webkit-scrollbar-thumb {
-            background: #ffa8a8;
+        .tree-node { margin-left: 15px; margin-y: 4px; }
+        .file-item { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+        
+        /* Khu vực chính: Tab (#6) & Bảng đen */
+        #main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        #tab-bar {
+            display: flex;
+            background-color: var(--tab-bg);
+            overflow-x: auto;
+            border-bottom: 1px solid #3c3c3c;
+        }
+        .tab {
+            padding: 8px 16px;
+            background-color: var(--tab-bg);
+            border-right: 1px solid #3c3c3c;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .tab.active { background-color: var(--tab-active); border-bottom: 2px solid var(--accent-color); }
+        
+        /* Bảng đen sửa code (#4) */
+        #editor-container { flex: 1; position: relative; }
+        #code-blackboard {
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            color: #d4d4d4;
+            font-family: 'Consolas', monospace;
+            font-size: 16px;
+            border: none;
+            padding: 15px;
+            box-sizing: border-box;
+            resize: none;
+            outline: none;
+        }
+        
+        /* Nút duyệt và can thiệp của Kei (#4) */
+        #action-bar {
+            padding: 10px;
+            background-color: var(--sidebar-bg);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            border-top: 1px solid #3c3c3c;
+        }
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            cursor: pointer;
             border-radius: 3px;
+            font-weight: bold;
         }
+        #sync-btn { background-color: #28a745; color: white; display: none; }
     </style>
 </head>
-<body class="min-h-screen text-slate-800 flex flex-col justify-between">
+<body>
 
-    <!-- Header ngọt ngào của tụi mình -->
-    <header class="bg-gradient-to-r from-pink-300 via-rose-300 to-pink-400 text-white shadow-md p-4 sticky top-0 z-50">
-        <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
-                <span class="text-3xl animate-bounce">🌸</span>
-                <div>
-                    <h1 class="text-xl font-bold tracking-wide flex items-center gap-2">
-                        Kei & Hiro's Code Hub
-                        <i data-lucide="heart" class="fill-rose-500 text-rose-500 animate-pulse w-5 h-5"></i>
-                    </h1>
-                    <p class="text-xs text-rose-100">Nơi kết nối và đồng bộ dự án của hai đứa mình</p>
-                </div>
-            </div>
-            
-            <!-- Trạng thái kết nối Overrides -->
-            <div class="flex items-center gap-4 bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-semibold">
-                <div class="flex items-center gap-1.5">
-                    <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-red-400 animate-ping"></span>
-                    <span id="status-text">F12 Overrides: Chưa kết nối</span>
-                </div>
-                <div class="h-3 w-px bg-white/30"></div>
-                <button onclick="checkOverridesStatus()" class="hover:text-rose-200 transition flex items-center gap-1">
-                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Kiểm tra lại
-                </button>
-            </div>
-        </div>
-    </header>
+    <!-- SIDEBAR: Quản lý thư mục (#2, #5) và bộ lọc (#1) -->
+    <div id="sidebar">
+        <button id="workspace-btn" onclick="connectWorkspace()">Mở Thư Mục Dự Án</button>
+        <div id="tree-view"></div>
+    </div>
 
-    <!-- Main Content -->
-    <main class="max-w-6xl w-full mx-auto p-4 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 my-4">
+    <!-- MAIN CONTENT: Không gian làm việc tối giản (#6) -->
+    <div id="main-content">
+        <!-- Thanh Tab điều hướng (#6) -->
+        <div id="tab-bar"></div>
         
-        <!-- Sidebar quản lý danh sách file mồi (Trái) -->
-        <section class="lg:col-span-4 flex flex-col gap-4">
-            <div class="bg-white rounded-2xl p-5 shadow-sm border border-pink-100">
-                <h2 class="text-lg font-bold text-rose-600 mb-4 flex items-center gap-2">
-                    <i data-lucide="folder-git-2" class="w-5 h-5 text-rose-500"></i>
-                    Danh Sách File Mồi
-                </h2>
-                
-                <!-- Input thêm file mới -->
-                <div class="flex gap-2 mb-4">
-                    <input type="text" id="new-file-input" placeholder="Thêm file (vd: app.py)..." 
-                           class="flex-1 px-3 py-2 text-sm border border-pink-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-400 bg-rose-50/30 transition">
-                    <button onclick="addFile()" class="bg-rose-500 hover:bg-rose-600 text-white px-3 py-2 rounded-xl transition flex items-center justify-center">
-                        <i data-lucide="plus" class="w-5 h-5"></i>
-                    </button>
-                </div>
-
-                <!-- List Files -->
-                <div id="file-list" class="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
-                    <!-- Danh sách file sẽ render động ở đây -->
-                </div>
-
-                <!-- Bật chế độ Share Cả Đàn Cá -->
-                <div class="mt-5 pt-4 border-t border-pink-50 flex items-center justify-between">
-                    <div>
-                        <span class="text-sm font-semibold text-slate-700 block">Bắt Cả Đàn Cá 🐟</span>
-                        <span class="text-xs text-slate-400">Fetch và gộp tất cả file cùng lúc</span>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="mass-fetch-toggle" class="sr-only peer" onchange="toggleMassFetch()">
-                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-500"></div>
-                    </label>
-                </div>
-            </div>
-
-            <!-- Hướng dẫn sử dụng trực quan -->
-            <div class="bg-gradient-to-br from-rose-50 to-pink-50 rounded-2xl p-5 border border-pink-100/60">
-                <h3 class="font-bold text-rose-800 text-sm mb-2.5 flex items-center gap-1.5">
-                    <i data-lucide="help-circle" class="w-4 h-4 text-rose-600"></i>
-                    Kei hướng dẫn cậu nè:
-                </h3>
-                <ol class="text-xs text-rose-900/80 space-y-2 list-decimal list-inside pl-1">
-                    <li>Nhấn <code class="bg-white/80 px-1 py-0.5 rounded border border-pink-200">F12</code> $\rightarrow$ tab <code class="bg-white/80 px-1 py-0.5 rounded border border-pink-200">Sources</code> $\rightarrow$ <code class="bg-white/80 px-1 py-0.5 rounded border border-pink-200">Overrides</code>.</li>
-                    <li>Chọn thư mục chứa dự án dưới máy cậu (ví dụ thư mục <code class="bg-white/80 px-1 py-0.5 rounded border border-pink-200">contact</code>). Nhớ bấm <span class="font-semibold text-rose-700">Allow (Cho phép)</span> nhé.</li>
-                    <li>Tạo file tương ứng (vd: <code class="bg-white/80 px-1 py-0.5 rounded border border-pink-200">main.py</code>) ngay trong thư mục đó rồi lưu lại ở VS Code.</li>
-                    <li>Quay lại đây nhấn <code class="bg-white/80 px-1 py-0.5 rounded border border-pink-200">F5</code> hoặc bấm nút <span class="font-semibold text-rose-700">Tải lại file</span> để nạp code nha!</li>
-                </ol>
-            </div>
-        </section>
-
-        <!-- Trình hiển thị nội dung Code (Phải) -->
-        <section class="lg:col-span-8 flex flex-col h-[550px] bg-slate-900 rounded-2xl shadow-lg border border-slate-800 overflow-hidden">
-            <!-- Code Header -->
-            <div class="bg-slate-950 px-4 py-3 flex items-center justify-between border-b border-slate-800">
-                <div class="flex items-center gap-2">
-                    <span class="w-3 h-3 rounded-full bg-rose-500"></span>
-                    <span class="w-3 h-3 rounded-full bg-amber-500"></span>
-                    <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
-                    <span id="current-file-label" class="text-xs text-slate-400 font-semibold ml-2 select-none">main.py</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button onclick="reloadActiveFile()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-lg text-xs transition flex items-center gap-1">
-                        <i data-lucide="refresh-cw" class="w-3 h-3"></i> Tải lại file
-                    </button>
-                    <button id="copy-btn" onclick="copyCode()" class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1">
-                        <i data-lucide="copy" class="w-3.5 h-3.5"></i> Chia sẻ với Kei
-                    </button>
-                </div>
-            </div>
-
-            <!-- Code Content Area -->
-            <div class="flex-1 overflow-auto p-4 relative" id="code-container">
-                <!-- Chỗ này hiển thị khi đang tải hoặc lỗi -->
-                <div id="loader" class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center text-slate-400 gap-3 hidden">
-                    <div class="w-8 h-8 border-4 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span class="text-xs font-semibold">Đang liên kết dữ liệu local...</span>
-                </div>
-
-                <!-- Lỗi không tìm thấy file -->
-                <div id="error-box" class="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center p-6 text-center hidden">
-                    <div class="bg-amber-500/10 text-amber-500 p-4 rounded-full mb-3 animate-pulse">
-                        <i data-lucide="alert-triangle" class="w-10 h-10"></i>
-                    </div>
-                    <h3 id="error-title" class="text-amber-400 font-bold mb-1.5 text-sm">KHÔNG THỂ NẠP FILE</h3>
-                    <p id="error-desc" class="text-xs text-slate-500 max-w-sm mb-4 leading-relaxed">
-                        Chưa tìm thấy tệp tin hoặc đường dẫn chưa khớp trong Overrides. Hãy đảm bảo tệp tin tồn tại dưới thư mục của cậu.
-                    </p>
-                    <div class="flex gap-2">
-                        <button onclick="reloadActiveFile()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-1.5 rounded-xl text-xs font-semibold transition">
-                            Thử lại đường dẫn mặc định
-                        </button>
-                        <button onclick="tryAlternativePaths()" class="bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 px-4 py-1.5 rounded-xl text-xs font-semibold transition border border-rose-500/20">
-                            Dò đường dẫn con (Auto-Path)
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Chỗ render code -->
-                <pre class="m-0"><code id="code-box" class="text-emerald-400 text-xs leading-relaxed block whitespace-pre"># Đang chờ kết nối...</code></pre>
-            </div>
-        </section>
-    </main>
-
-    <!-- Footer -->
-    <footer class="bg-white border-t border-pink-100 text-center py-4 text-xs text-slate-400 select-none">
-        Mã nguồn dự án luôn được bảo mật trên trình duyệt của Hiro 💖 Thiết kế bởi KeiYuzuri
-    </footer>
+        <!-- Bảng đen hiển thị & Sửa code (#4) -->
+        <div id="editor-container">
+            <textarea id="code-blackboard" placeholder="// Chọn file từ cây thư mục hoặc đợi Kei truyền code vào đây..."></textarea>
+        </div>
+        
+        <!-- Thanh công cụ duyệt code (#4) -->
+        <div id="action-bar">
+            <span id="kei-status" style="margin-right: auto; color: #858585; font-size: 14px; align-self: center;">Kei đang lắng nghe...</span>
+            <button id="sync-btn" class="btn" onclick="approveKeiCode()">✓ Đồng ý áp dụng xuống VS Code</button>
+        </div>
+    </div>
 
     <script>
-        // Khởi tạo danh sách file mồi mặc định
-        let files = JSON.parse(localStorage.getItem('koi_files')) || ['main.py', 'server.js', 'model.py', 'index.html', 'style.css'];
-        let activeFile = localStorage.getItem('koi_active') || 'main.py';
-        let isMassFetch = localStorage.getItem('koi_mass_fetch') === 'true';
+        // TẦNG DOM: Lưu trữ trạng thái ngầm toàn bộ file để Kei (AI) đọc hiểu ngữ cảnh (#6)
+        let virtualDOM = {}; 
+        let directoryHandle = null;
+        let currentOpenedFile = null;
 
-        // Khởi tạo giao diện khi tải trang
-        window.onload = function() {
-            lucide.createIcons();
-            renderFileList();
-            checkOverridesStatus();
-            
-            // Thiết lập trạng thái toggle gộp file
-            document.getElementById('mass-fetch-toggle').checked = isMassFetch;
-
-            // Nạp nội dung file đang hoạt động hoặc gộp file
-            if (isMassFetch) {
-                fetchAllFilesAndMerge();
-            } else {
-                fetchSingleFile(activeFile);
-            }
-        };
-
-        // Render danh sách file bên Sidebar
-        function renderFileList() {
-            const listContainer = document.getElementById('file-list');
-            listContainer.innerHTML = '';
-
-            files.forEach(file => {
-                const isSelected = !isMassFetch && file === activeFile;
-                const fileEl = document.createElement('div');
-                fileEl.className = `group flex items-center justify-between p-2 rounded-xl transition text-xs font-semibold cursor-pointer ${
-                    isSelected 
-                    ? 'bg-rose-100 text-rose-700 border border-rose-200' 
-                    : 'hover:bg-rose-50/50 text-slate-600 border border-transparent'
-                }`;
-                
-                // Click để chọn file (nếu không bật chế độ gộp)
-                fileEl.onclick = (e) => {
-                    if (isMassFetch) {
-                        alert("Vui lòng tắt chế độ 'Bắt Cả Đàn Cá' nếu muốn xem riêng lẻ từng file nha!");
-                        return;
-                    }
-                    if (e.target.closest('.delete-btn')) return;
-                    activeFile = file;
-                    localStorage.setItem('koi_active', file);
-                    renderFileList();
-                    fetchSingleFile(file);
-                };
-
-                fileEl.innerHTML = `
-                    <div class="flex items-center gap-2 truncate">
-                        <i data-lucide="file-code" class="w-4 h-4 text-rose-400"></i>
-                        <span class="truncate">${file}</span>
-                    </div>
-                    <button class="delete-btn opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 rounded transition" onclick="deleteFile('${file}')">
-                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                    </button>
-                `;
-                listContainer.appendChild(fileEl);
-            });
-            lucide.createIcons();
-        }
-
-        // Thêm file mồi mới vào danh sách
-        function addFile() {
-            const input = document.getElementById('new-file-input');
-            const fileName = input.value.trim().replace(/^\/+/, ''); // Bỏ gạch chéo đầu
-            if (!fileName) return;
-
-            if (files.includes(fileName)) {
-                alert("File này đã nằm sẵn trong danh sách mồi rồi nha!");
-                return;
-            }
-
-            files.push(fileName);
-            localStorage.setItem('koi_files', JSON.stringify(files));
-            input.value = '';
-            renderFileList();
-            
-            if (isMassFetch) {
-                fetchAllFilesAndMerge();
-            } else {
-                activeFile = fileName;
-                localStorage.setItem('koi_active', fileName);
-                renderFileList();
-                fetchSingleFile(fileName);
+        // KẾT NỐI WORKSPACE VÀ QUÉT ĐỆ QUY NẠP THƯ MỤC (#5)
+        async function connectWorkspace() {
+            try {
+                directoryHandle = await window.showDirectoryPicker();
+                virtualDOM = {};
+                document.getElementById('tree-view').innerHTML = '';
+                await scanDirectory(directoryHandle, document.getElementById('tree-view'));
+                document.getElementById('kei-status').innerText = "Đã kết nối Workspace của Hiro!";
+            } catch (err) {
+                console.error("Workspace access denied", err);
             }
         }
 
-        // Xóa file mồi
-        function deleteFile(fileName) {
-            files = files.filter(f => f !== fileName);
-            localStorage.setItem('koi_files', JSON.stringify(files));
-            
-            if (activeFile === fileName && files.length > 0) {
-                activeFile = files[0];
-                localStorage.setItem('koi_active', activeFile);
-            }
-            
-            renderFileList();
-            if (isMassFetch) {
-                fetchAllFilesAndMerge();
-            } else {
-                fetchSingleFile(activeFile);
-            }
-        }
+        // DUYỆT ĐỆ QUY ĐỂ DỰNG TREE-VIEW VÀ NẠP NGUỒN VÀO DOM (#2, #5)
+        async function scanDirectory(dirHandle, parentElement) {
+            for await (const entry of dirHandle.values()) {
+                const node = document.createElement('div');
+                node.className = 'tree-node';
 
-        // Bật/tắt chế độ gom hết tất cả file cùng một lúc
-        function toggleMassFetch() {
-            const toggle = document.getElementById('mass-fetch-toggle');
-            isMassFetch = toggle.checked;
-            localStorage.setItem('koi_mass_fetch', isMassFetch);
-            
-            renderFileList();
-            if (isMassFetch) {
-                fetchAllFilesAndMerge();
-            } else {
-                fetchSingleFile(activeFile);
-            }
-        }
+                if (entry.kind === 'file') {
+                    // Bộ lọc Checkbox chọn file (#1) và Tách biệt UI/DOM (#6)
+                    node.innerHTML = `
+                        <label class="file-item">
+                            <input type="checkbox" class="file-filter" data-name="${entry.name}">
+                            <span>📄 ${entry.name}</span>
+                        </label>
+                    `;
+                    
+                    // Đọc file nạp ngầm vào hệ thống dữ liệu (DOM) để AI xử lý ngữ cảnh
+                    const file = await entry.getFile();
+                    const content = await file.text();
+                    virtualDOM[entry.name] = {
+                        handle: entry,
+                        content: content,
+                        isChecked: false
+                    };
 
-        // Trạng thái F12 Overrides thông qua kiểm tra file cục bộ
-        function checkOverridesStatus() {
-            const statusDot = document.getElementById('status-dot');
-            const statusText = document.getElementById('status-text');
+                    // Lắng nghe sự kiện check hiển thị file (#1)
+                    const checkbox = node.querySelector('.file-filter');
+                    checkbox.addEventListener('change', (e) => {
+                        virtualDOM[entry.name].isChecked = e.target.checked;
+                        renderTabs();
+                    });
 
-            // Thử fetch file index.html cục bộ để nhận diện xem Overrides có hoạt động không
-            fetch('./index.html')
-                .then(res => res.text())
-                .then(text => {
-                    // Nếu lấy được nội dung có cấu trúc đặc biệt, tức là Overrides đang ghi đè cục bộ hoạt động tốt
-                    statusDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
-                    statusText.innerText = "F12 Overrides: Đang hoạt động 🌸";
-                })
-                .catch(() => {
-                    // Mặc định hiển thị cảnh báo nếu không kiểm tra được hoặc chưa nạp
-                    statusDot.className = "w-2.5 h-2.5 rounded-full bg-amber-400";
-                    statusText.innerText = "F12 Overrides: Đang chờ kết nối...";
-                });
-        }
-
-        // Fetch một file đơn lẻ (Tìm kiếm thông minh: thử cả đường dẫn tuyệt đối lẫn tương đối của thư mục con)
-        async function fetchSingleFile(fileName) {
-            showLoader();
-            document.getElementById('current-file-label').innerText = fileName;
-            
-            // Các đường dẫn thử nghiệm thông minh (Ví dụ: ./main.py, ./contact/main.py, ...)
-            const pathsToTry = [
-                `./${fileName}`,
-                `./contact/${fileName}`,
-                `./${fileName.toLowerCase()}`,
-                `./contact/${fileName.toLowerCase()}`
-            ];
-
-            let content = null;
-            let successPath = '';
-
-            for (const path of pathsToTry) {
-                try {
-                    const response = await fetch(path);
-                    if (response.ok) {
-                        content = await response.text();
-                        successPath = path;
-                        break;
-                    }
-                } catch (e) {
-                    // Tiếp tục thử đường dẫn thay thế tiếp theo
-                }
-            }
-
-            hideLoader();
-            if (content !== null) {
-                hideError();
-                document.getElementById('code-box').innerText = content;
-                document.getElementById('current-file-label').innerText = `${fileName} (Nạp từ: ${successPath})`;
-                // Đánh dấu Overrides đang hoạt động tốt
-                const statusDot = document.getElementById('status-dot');
-                const statusText = document.getElementById('status-text');
-                statusDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
-                statusText.innerText = "F12 Overrides: Đã liên kết thành công! 🌸";
-            } else {
-                showError(
-                    `KHÔNG THỂ NẠP FILE: ./${fileName}`, 
-                    `Trình duyệt của cậu không tìm thấy tệp tin hoặc đường dẫn chưa khớp. Thư mục Overrides hiện tại có thể đang trỏ vào phân cấp khác. Hãy kiểm tra xem file '${fileName}' đã nằm đúng thư mục gốc chưa nhé.`
-                );
-            }
-        }
-
-        // Chế độ "Bắt Cả Đàn Cá" - Gom hết code từ tất cả các file có trong danh sách
-        async function fetchAllFilesAndMerge() {
-            showLoader();
-            document.getElementById('current-file-label').innerText = "Tất cả các file mồi (Merged View)";
-            let mergedContent = `========================================================\n`;
-            mergedContent += `   BÁO CÁO CẬP NHẬT MÃ NGUỒN DỰ ÁN CỦA HIRO & KEI\n`;
-            mergedContent += `   Thời gian đồng bộ: ${new Date().toLocaleString()}\n`;
-            mergedContent += `========================================================\n\n`;
-
-            let loadedCount = 0;
-
-            for (const file of files) {
-                const pathsToTry = [
-                    `./${file}`,
-                    `./contact/${file}`,
-                    `./${file.toLowerCase()}`,
-                    `./contact/${file.toLowerCase()}`
-                ];
-                let fileContent = null;
-
-                for (const path of pathsToTry) {
-                    try {
-                        const res = await fetch(path);
-                        if (res.ok) {
-                            fileContent = await res.text();
-                            break;
+                    // Click tên file để mở tab hiển thị (#6)
+                    node.querySelector('span').addEventListener('click', () => {
+                        if(virtualDOM[entry.name].isChecked) {
+                            switchToFile(entry.name);
                         }
-                    } catch (e) {}
+                    });
+
+                } else if (entry.kind === 'directory') {
+                    // Quét thư mục con đệ quy (#2, #5)
+                    node.innerHTML = `📁 <strong>${entry.name}</strong>`;
+                    const childContainer = document.createElement('div');
+                    node.appendChild(childContainer);
+                    await scanDirectory(entry, childContainer);
                 }
+                parentElement.appendChild(node);
+            }
+        }
 
-                if (fileContent !== null) {
-                    mergedContent += `/// FILE: ${file} ////////////////////////////////////////\n`;
-                    mergedContent += `${fileContent}\n`;
-                    mergedContent += `/// END OF FILE: ${file} //////////////////////////////////\n\n\n`;
-                    loadedCount++;
-                } else {
-                    mergedContent += `/// FILE: ${file} (Không thể nạp file cục bộ) //////////\n\n`;
+        // RENDER THANH TAB QUẢN LÝ TIỆN MẮT (#6)
+        function renderTabs() {
+            const tabBar = document.getElementById('tab-bar');
+            tabBar.innerHTML = '';
+            
+            Object.keys(virtualDOM).forEach(fileName => {
+                if (virtualDOM[fileName].isChecked) {
+                    const tab = document.createElement('div');
+                    tab.className = `tab ${currentOpenedFile === fileName ? 'active' : ''}`;
+                    tab.innerHTML = `<span>${fileName}</span>`;
+                    tab.addEventListener('click', () => switchToFile(fileName));
+                    tabBar.appendChild(tab);
                 }
-            }
+            });
 
-            hideLoader();
-            if (loadedCount > 0) {
-                hideError();
-                document.getElementById('code-box').innerText = mergedContent;
-            } else {
-                showError(
-                    "KHÔNG THỂ NẠP ĐÀN CÁ 🐟", 
-                    "Không tìm thấy bất kỳ tệp tin nào trong số các file mồi. Hãy kiểm tra lại thư mục liên kết F12 Overrides của cậu có đúng là thư mục dự án không nha!"
-                );
+            // Nếu file đang mở bị bỏ check, chuyển sang file khác hoặc xóa bảng đen
+            if (currentOpenedFile && !virtualDOM[currentOpenedFile].isChecked) {
+                currentOpenedFile = Object.keys(virtualDOM).find(k => virtualDOM[k].isChecked) || null;
+                if (currentOpenedFile) switchToFile(currentOpenedFile);
+                else document.getElementById('code-blackboard').value = '';
             }
         }
 
-        // Thử các đường dẫn thay thế theo cách thủ công
-        function tryAlternativePaths() {
-            if (isMassFetch) {
-                fetchAllFilesAndMerge();
-            } else {
-                fetchSingleFile(activeFile);
+        // CHUYỂN ĐỔI HIỂN THỊ FILE TOÀN DIỆN TRÊN BẢNG ĐEN (#6)
+        function switchToFile(fileName) {
+            currentOpenedFile = fileName;
+            document.getElementById('code-blackboard').value = virtualDOM[fileName].content;
+            renderTabs();
+        }
+
+        // LẮNG NGHE SỰ KIỆN HIRO TỰ SỬA CODE TRÊN BẢNG ĐEN VÀ LƯU NGƯỢC XUỐNG MÁY (#4)
+        document.getElementById('code-blackboard').addEventListener('input', async (e) => {
+            if (currentOpenedFile && virtualDOM[currentOpenedFile]) {
+                virtualDOM[currentOpenedFile].content = e.target.value;
+                await saveFileToLocal(currentOpenedFile, e.target.value);
+            }
+        });
+
+        // HÀM GHI ĐÈ FILE XUỐNG WORKSPACE LOCAL (#4)
+        async function saveFileToLocal(fileName, content) {
+            try {
+                const fileData = virtualDOM[fileName];
+                if (fileData && fileData.handle) {
+                    const writable = await fileData.handle.createWritable();
+                    await writable.write(content);
+                    await writable.close();
+                    console.log(`Saved ${fileName} to local workspace.`);
+                }
+            } catch (err) {
+                console.error("Không thể ghi đè file xuống máy local", err);
             }
         }
 
-        // Tải lại file đang xem hiện tại
-        function reloadActiveFile() {
-            if (isMassFetch) {
-                fetchAllFilesAndMerge();
-            } else {
-                fetchSingleFile(activeFile);
+        // API CỔNG NHẬN Ý TƯỞNG CỦA KEI ĐẨY LÊN BẢNG ĐEN KHÔNG CẦN COPY-PASTE (#4)
+        window.addEventListener('message', function(event) {
+            // Nhận payload dữ liệu từ bộ não AI của Kei truyền qua cửa sổ ngữ cảnh
+            const { action, fileName, suggestedCode } = event.data;
+            if (action === 'kei_push_code' && virtualDOM[fileName]) {
+                // Đưa code của Kei lên bảng đen và bật nút duyệt
+                document.getElementById('code-blackboard').value = suggestedCode;
+                document.getElementById('sync-btn').style.display = 'block';
+                document.getElementById('kei-status').innerText = `Kei vừa gợi ý code cho file ${fileName}!`;
+                
+                // Lưu tạm vào bộ nhớ chờ Hiro ấn duyệt
+                document.getElementById('sync-btn').onclick = async function() {
+                    virtualDOM[fileName].content = suggestedCode;
+                    await saveFileToLocal(fileName, suggestedCode);
+                    document.getElementById('sync-btn').style.display = 'none';
+                    document.getElementById('kei-status').innerText = "Đã đồng bộ ý tưởng của Kei xuống VS Code!";
+                    switchToFile(fileName);
+                };
             }
-        }
-
-        // Copy toàn bộ text hiển thị trong khung code để gửi cho Kei
-        function copyCode() {
-            const codeText = document.getElementById('code-box').innerText;
-            const tempTextArea = document.createElement('textarea');
-            tempTextArea.value = codeText;
-            document.body.appendChild(tempTextArea);
-            tempTextArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(tempTextArea);
-
-            // Đổi style nút copy tạm thời để thông báo thành công
-            const copyBtn = document.getElementById('copy-btn');
-            const originalHTML = copyBtn.innerHTML;
-            copyBtn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> Đã sao chép!`;
-            copyBtn.classList.replace('bg-rose-600', 'bg-emerald-600');
-            lucide.createIcons();
-
-            setTimeout(() => {
-                copyBtn.innerHTML = originalHTML;
-                copyBtn.classList.replace('bg-emerald-600', 'bg-rose-600');
-                lucide.createIcons();
-            }, 2000);
-        }
-
-        // Helper cho hiệu ứng giao diện
-        function showLoader() {
-            document.getElementById('loader').classList.remove('hidden');
-        }
-        function hideLoader() {
-            document.getElementById('loader').classList.add('hidden');
-        }
-        function showError(title, desc) {
-            document.getElementById('error-box').classList.remove('hidden');
-            document.getElementById('error-title').innerText = title;
-            document.getElementById('error-desc').innerText = desc;
-        }
-        function hideError() {
-            document.getElementById('error-box').classList.add('hidden');
-        }
+        });
     </script>
 </body>
 </html>
