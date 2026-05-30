@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kei & Hiro Autonomous IDE - V3.1</title>
+    <title>Kei & Hiro Autonomous IDE - V3.2</title>
     <style>
         :root {
             --bg-color: #1e1e1e;
@@ -51,8 +51,17 @@
         
         #tree-view { flex: 1; overflow-y: auto; font-size: 14px; }
         .tree-node { margin-left: 12px; margin-top: 6px; }
+        
+        /* FOLDER TOGGLE STYLE */
         .folder-header { display: flex; align-items: center; justify-content: space-between; font-weight: bold; color: #e0e0e0; cursor: pointer; }
-        .file-item { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+        .folder-title { display: flex; align-items: center; gap: 4px; }
+        .arrow-icon { font-size: 10px; display: inline-block; width: 12px; transition: transform 0.1s ease; color: #858585; }
+        
+        /* CSS ẨN CONTAINER KHI THU GỌN */
+        .folder-container { display: block; }
+        .folder-container.collapsed { display: none; }
+
+        .file-item { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-left: 16px; }
         .file-label { display: flex; align-items: center; gap: 5px; cursor: pointer; flex: 1; }
         .node-actions { display: none; gap: 3px; }
         .tree-node:hover > .folder-header .node-actions,
@@ -81,6 +90,7 @@
 </head>
 <body>
 
+    <!-- SIDEBAR: Cấu trúc & Thao tác quản trị File tối cao -->
     <div id="sidebar">
         <div class="btn-group">
             <button id="workspace-btn" onclick="connectWorkspace()">📂 Mở Dự Án</button>
@@ -90,6 +100,7 @@
         <div id="tree-view">// Chưa kết nối thư mục...</div>
     </div>
 
+    <!-- MAIN SPACE: Trình biên tập cô lập trạng thái -->
     <div id="main-content">
         <div id="tab-bar"></div>
         <div id="editor-container">
@@ -105,8 +116,9 @@
         let virtualDOM = {}; 
         let directoryHandle = null;
         let currentOpenedFile = null;
+        let lastStructureSnapshot = ""; 
+        let folderCollapsedStates = {}; // Lưu trữ trạng thái đóng/mở của folder để duy trì sau khi refresh
         
-        // HỆ THỐNG CỜ KHÓA LUỒNG THÔNG MINH - TRIỆT TIÊU LỖI CON TRỎ VÀ RELOAD QUÁ KHỨ
         let isFocused = false; 
         let isTyping = false;
         let debounceTimer = null;
@@ -114,11 +126,8 @@
         async function connectWorkspace() {
             try {
                 directoryHandle = await window.showDirectoryPicker();
-                // Nạp cấu trúc dự án hoàn chỉnh lên UI trước
-                await refreshWorkspace();
+                await refreshWorkspace(true); 
                 document.getElementById('kei-status').innerText = "Đã nạp xong cấu trúc dự án!";
-                
-                // Sau khi nạp xong hoàn toàn mới kích hoạt bộ đôi mắt thần ngầm chạy sau
                 startBackgroundWatchers(); 
             } catch (err) {
                 console.error("Workspace access denied", err);
@@ -126,22 +135,42 @@
             }
         }
 
-        // LÀM TƯƠI VÀ ĐỒNG BỘ TRẠNG THÁI CHECKBOX
-        async function refreshWorkspace() {
+        async function refreshWorkspace(forceRender = false) {
             if (!directoryHandle) return;
             const checkedStates = {};
             Object.keys(virtualDOM).forEach(k => { checkedStates[k] = virtualDOM[k].isChecked; });
 
-            // Chỉ xóa trắng hiển thị cây thư mục để render lại, tránh đụng vào luồng dữ liệu thô
-            const treeView = document.getElementById('tree-view');
-            treeView.innerHTML = '';
-            await scanDirectory(directoryHandle, treeView, checkedStates, "");
-            renderTabs();
+            const tempContainer = document.createElement('div');
+            await scanDirectory(directoryHandle, tempContainer, checkedStates, "");
+            
+            const currentSnapshot = tempContainer.innerHTML;
+
+            if (currentSnapshot !== lastStructureSnapshot || forceRender) {
+                lastStructureSnapshot = currentSnapshot;
+                const treeView = document.getElementById('tree-view');
+                treeView.innerHTML = '';
+                while (tempContainer.firstChild) {
+                    treeView.appendChild(tempContainer.firstChild);
+                }
+                renderTabs();
+                console.log("Cấu trúc Workspace đã thay đổi! Tiến hành cập nhật vi mô UI.");
+            }
         }
 
-        // QUÉT ĐỆ QUY + TÍCH HỢP BỘ ĐIỀU KHIỂN CẤU TRÚC FILE (TẠO/XÓA)
         async function scanDirectory(dirHandle, parentElement, checkedStates = {}, relativePath = "") {
+            const entries = [];
             for await (const entry of dirHandle.values()) {
+                entries.push(entry);
+            }
+
+            entries.sort((a, b) => {
+                if (a.kind !== b.kind) {
+                    return a.kind === 'directory' ? -1 : 1; 
+                }
+                return a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' });
+            });
+
+            for (const entry of entries) {
                 const node = document.createElement('div');
                 node.className = 'tree-node';
                 const currentPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
@@ -160,7 +189,6 @@
                         </div>
                     `;
                     
-                    // Chỉ nạp nội dung file nếu nó chưa có trong virtualDOM hoặc Hiro không trong luồng gõ code
                     if (!virtualDOM[currentPath] || !isTyping) {
                         try {
                             const file = await entry.getFile();
@@ -191,14 +219,24 @@
                         if (confirm(`Xóa vĩnh viễn file ${entry.name} dưới máy local?`)) {
                             await dirHandle.removeEntry(entry.name);
                             delete virtualDOM[currentPath];
-                            await refreshWorkspace();
+                            await refreshWorkspace(true);
                         }
                     });
 
                 } else if (entry.kind === 'directory') {
+                    // Khởi tạo trạng thái mở (false = không thu gọn) nếu folder này chưa từng được lưu trạng thái
+                    if (folderCollapsedStates[currentPath] === undefined) {
+                        folderCollapsedStates[currentPath] = false; 
+                    }
+                    
+                    const isCollapsed = folderCollapsedStates[currentPath];
+
                     node.innerHTML = `
                         <div class="folder-header">
-                            <span>📁 <strong>${entry.name}</strong></span>
+                            <div class="folder-title">
+                                <span class="arrow-icon">${isCollapsed ? '▶' : '▼'}</span>
+                                <span>📁 <strong>${entry.name}</strong></span>
+                            </div>
                             <div class="node-actions">
                                 <span class="action-icon add-file" title="Tạo file trong thư mục này">+📄</span>
                                 <span class="action-icon add-folder" title="Tạo folder trong thư mục này">+📁</span>
@@ -207,7 +245,25 @@
                         </div>
                     `;
                     const childContainer = document.createElement('div');
+                    childContainer.className = `folder-container ${isCollapsed ? 'collapsed' : ''}`;
                     node.appendChild(childContainer);
+
+                    // XỬ LÝ SỰ KIỆN CLICK THU GỌN/MỞ RỘNG NHƯ VSCODE
+                    const folderTitle = node.querySelector('.folder-title');
+                    folderTitle.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const nextState = !folderCollapsedStates[currentPath];
+                        folderCollapsedStates[currentPath] = nextState;
+                        
+                        const arrow = folderTitle.querySelector('.arrow-icon');
+                        if (nextState) {
+                            arrow.innerText = '▶';
+                            childContainer.classList.add('collapsed');
+                        } else {
+                            arrow.innerText = '▼';
+                            childContainer.classList.remove('collapsed');
+                        }
+                    });
 
                     node.querySelector('.add-file').addEventListener('click', (e) => { e.stopPropagation(); createNewNode(entry, 'file'); });
                     node.querySelector('.add-folder').addEventListener('click', (e) => { e.stopPropagation(); createNewNode(entry, 'dir'); });
@@ -215,7 +271,8 @@
                         e.stopPropagation();
                         if (confirm(`Xóa toàn bộ thư mục ${entry.name} và các file bên trong?`)) {
                             await dirHandle.removeEntry(entry.name, { recursive: true });
-                            await refreshWorkspace();
+                            delete folderCollapsedStates[currentPath];
+                            await refreshWorkspace(true);
                         }
                     });
 
@@ -225,7 +282,6 @@
             }
         }
 
-        // HÀM TẠO FILE/THƯ MỤC MỚI TINH TRÊN WEB ĐẨY XUẤT XUỐNG LOCAL
         async function createNewNode(parentHandle, type) {
             if (!parentHandle) return alert("Vui lòng mở thư mục dự án trước!");
             const name = prompt(`Nhập tên ${type === 'file' ? 'file mới (kèm đuôi)' : 'thư mục mới'}:`);
@@ -237,17 +293,16 @@
                     await parentHandle.getDirectoryHandle(name, { create: true });
                 }
                 document.getElementById('kei-status').innerText = `Đã tạo thành công: ${name}`;
-                await refreshWorkspace();
+                await refreshWorkspace(true);
             } catch (err) {
                 console.error("Lỗi cấu trúc:", err);
             }
         }
 
-        // RENDER TABS QUẢN LÝ CÔ LẬP GIAO DIỆN
         function renderTabs() {
             const tabBar = document.getElementById('tab-bar');
             tabBar.innerHTML = '';
-            Object.keys(virtualDOM).forEach(path => {
+            Object.keys(virtualDOM).sort().forEach(path => {
                 if (virtualDOM[path].isChecked) {
                     const tab = document.createElement('div');
                     tab.className = `tab ${currentOpenedFile === path ? 'active' : ''}`;
@@ -269,12 +324,10 @@
             renderTabs();
         }
 
-        // THEO DÕI HÀNH VI CON TRỎ CHUỘT ĐỂ KHÓA LUỒNG XUNG ĐỘT
         const blackboard = document.getElementById('code-blackboard');
         blackboard.addEventListener('focus', () => { isFocused = true; });
         blackboard.addEventListener('blur', () => { isFocused = false; });
 
-        // CƠ CHẾ GIẢM CHẤN GHI ĐĨA (DEBOUNCE 300MS TỐI ƯU HÓA)
         blackboard.addEventListener('input', (e) => {
             if (!currentOpenedFile) return;
             isTyping = true;
@@ -300,9 +353,7 @@
             }
         }
 
-        // BỘ ĐÔI MẮT THẦN QUÉT NGẦM (POLLING WATCHERS) - TRIỆT TIÊU HOÀN TOÀN LỖI CON TRỎ
         function startBackgroundWatchers() {
-            // Mắt thần 1: Quét ngầm nội dung file hiện tại (Tần suất 1.5 giây, chỉ chạy khi Hiro KHÔNG focus gõ code)
             setInterval(async () => {
                 if (isFocused || isTyping || !currentOpenedFile || !virtualDOM[currentOpenedFile]) return;
                 try {
@@ -311,37 +362,24 @@
                     const latestContent = await file.text();
 
                     if (latestContent !== virtualDOM[currentOpenedFile].content) {
-                        // CHỤP LẠI TỌA ĐỘ VỊ TRÍ CON TRỎ TRƯỚC KHI NẠP ĐÈ
                         const start = blackboard.selectionStart;
                         const end = blackboard.selectionEnd;
 
                         virtualDOM[currentOpenedFile].content = latestContent;
                         blackboard.value = latestContent;
 
-                        // KHÔI PHỤC NGAY VỊ TRÍ CON TRỎ CHUỘT
                         blackboard.setSelectionRange(start, end);
                         console.log(`Đồng bộ ngầm thành công file: ${currentOpenedFile}`);
                     }
                 } catch (err) { console.error("Lỗi mắt thần nội dung:", err); }
             }, 1500);
 
-            // Mắt thần 2: Quét ngầm làm tươi cấu trúc thư mục tự động từ VS Code (Tần suất 4 giây)
             setInterval(async () => {
-                // Chỉ quét cấu trúc khi Hiro hoàn toàn rảnh tay để tránh gián đoạn trải nghiệm UI
                 if (isFocused || isTyping || !directoryHandle) return;
-                
-                const checkedStates = {};
-                Object.keys(virtualDOM).forEach(k => { checkedStates[k] = virtualDOM[k].isChecked; });
-                
-                const treeView = document.getElementById('tree-view');
-                if (treeView) {
-                    treeView.innerHTML = '';
-                    await scanDirectory(directoryHandle, treeView, checkedStates, "");
-                }
+                await refreshWorkspace(false); 
             }, 4000);
         }
 
-        // CỔNG GIAO TIẾP Ý TƯỞNG CỦA KEI ĐẨY LÊN BẢNG ĐEN
         window.addEventListener('message', function(event) {
             const { action, fileName, suggestedCode } = event.data;
             if (action === 'kei_push_code' && virtualDOM[fileName]) {
