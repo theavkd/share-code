@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kei & Hiro Workspace IDE - V2</title>
+    <title>Kei & Hiro Autonomous IDE - V3</title>
     <style>
         :root {
             --bg-color: #1e1e1e;
@@ -13,6 +13,7 @@
             --text-color: #d4d4d4;
             --accent-color: #9cdcfe;
             --button-bg: #0e639c;
+            --danger-color: #a61c1c;
         }
         body {
             margin: 0;
@@ -23,8 +24,10 @@
             height: 100vh;
             overflow: hidden;
         }
+        
+        /* SIDEBAR & FILE CONTROLS */
         #sidebar {
-            width: 250px;
+            width: 280px;
             background-color: var(--sidebar-bg);
             border-right: 1px solid #3c3c3c;
             display: flex;
@@ -33,7 +36,7 @@
             box-sizing: border-box;
         }
         .btn-group { display: flex; gap: 5px; margin-bottom: 10px; }
-        #workspace-btn, #refresh-btn {
+        button {
             background-color: var(--button-bg);
             color: white;
             border: none;
@@ -41,22 +44,36 @@
             cursor: pointer;
             font-weight: bold;
             border-radius: 4px;
-            flex: 1;
         }
-        #refresh-btn { background-color: #555; }
+        #workspace-btn { flex: 2; }
+        .tool-btn { padding: 4px 8px; font-size: 12px; background-color: #444; }
+        .tool-btn:hover { background-color: #555; }
+        
         #tree-view { flex: 1; overflow-y: auto; font-size: 14px; }
-        .tree-node { margin-left: 15px; margin-top: 4px; margin-bottom: 4px; }
-        .file-item { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+        .tree-node { margin-left: 12px; margin-top: 6px; }
+        .folder-header { display: flex; align-items: center; justify-content: space-between; font-weight: bold; color: #e0e0e0; cursor: pointer; }
+        .file-item { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+        .file-label { display: flex; align-items: center; gap: 5px; cursor: pointer; flex: 1; }
+        .node-actions { display: none; gap: 3px; }
+        .tree-node:hover > .folder-header .node-actions,
+        .file-item:hover .node-actions { display: flex; }
+        .action-icon { cursor: pointer; padding: 2px 4px; border-radius: 3px; font-size: 11px; background: #333; }
+        .action-icon:hover { background: var(--button-bg); }
+        .delete-icon:hover { background: var(--danger-color); }
+
+        /* MAIN EDITOR SPACE */
         #main-content { flex: 1; display: flex; flex-direction: column; }
         #tab-bar { display: flex; background-color: var(--tab-bg); overflow-x: auto; border-bottom: 1px solid #3c3c3c; }
-        .tab { padding: 8px 16px; background-color: var(--tab-bg); border-right: 1px solid #3c3c3c; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-        .tab.active { background-color: var(--tab-active); border-bottom: 2px solid var(--accent-color); }
+        .tab { padding: 8px 16px; background-color: var(--tab-bg); border-right: 1px solid #3c3c3c; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+        .tab.active { background-color: var(--tab-active); border-bottom: 2px solid var(--accent-color); color: #fff; }
+        
         #editor-container { flex: 1; position: relative; }
         #code-blackboard {
             width: 100%; height: 100%; background-color: var(--bg-color); color: #d4d4d4;
             font-family: 'Consolas', monospace; font-size: 16px; border: none; padding: 15px;
             box-sizing: border-box; resize: none; outline: none;
         }
+        
         #action-bar { padding: 10px; background-color: var(--sidebar-bg); display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #3c3c3c; }
         .btn { padding: 6px 12px; border: none; cursor: pointer; border-radius: 3px; font-weight: bold; }
         #sync-btn { background-color: #28a745; color: white; display: none; }
@@ -66,19 +83,20 @@
 
     <div id="sidebar">
         <div class="btn-group">
-            <button id="workspace-btn" onclick="connectWorkspace()">Mở Dự Án</button>
-            <button id="refresh-btn" onclick="refreshWorkspace()">🔄 Làm Tươi</button>
+            <button id="workspace-btn" onclick="connectWorkspace()">📂 Mở Dự Án</button>
+            <button class="tool-btn" onclick="createNewNode(directoryHandle, 'file')">📄 +File</button>
+            <button class="tool-btn" onclick="createNewNode(directoryHandle, 'dir')">📁 +Folder</button>
         </div>
-        <div id="tree-view"></div>
+        <div id="tree-view">// Chưa kết nối thư mục...</div>
     </div>
 
     <div id="main-content">
         <div id="tab-bar"></div>
         <div id="editor-container">
-            <textarea id="code-blackboard" placeholder="// Chọn file hoặc đợi Kei truyền code vào đây..."></textarea>
+            <textarea id="code-blackboard" placeholder="// Click chọn file đã tick ở sidebar để bắt đầu làm việc cùng Kei..."></textarea>
         </div>
         <div id="action-bar">
-            <span id="kei-status" style="margin-right: auto; color: #858585; font-size: 14px; align-self: center;">Kei đang theo dõi...</span>
+            <span id="kei-status" style="margin-right: auto; color: #858585; font-size: 14px; align-self: center;">Hệ thống sẵn sàng...</span>
             <button id="sync-btn" class="btn">✓ Đồng ý áp dụng xuống VS Code</button>
         </div>
     </div>
@@ -87,86 +105,144 @@
         let virtualDOM = {}; 
         let directoryHandle = null;
         let currentOpenedFile = null;
-        let isTyping = false; // Cờ chặn không cho nạp đè khi Hiro đang gõ code
+        
+        // HỆ THỐNG CỜ KHÓA LUỒNG THÔNG MINH - TRIỆT TIÊU LỖI CON TRỎ VÀ RELOAD QUÁ KHỨ (#4, #6)
+        let isFocused = false; 
+        let isTyping = false;
         let debounceTimer = null;
 
         async function connectWorkspace() {
             try {
                 directoryHandle = await window.showDirectoryPicker();
                 await refreshWorkspace();
-                startBackgroundWatcher(); // Kích hoạt bộ giám sát ngầm dữ liệu chống sụp đổ
+                startBackgroundWatchers(); // Bật bộ đôi mắt thần quét ngầm cấu trúc và nội dung
             } catch (err) {
                 console.error("Workspace access denied", err);
             }
         }
 
-        // TỰ ĐỘNG CẬP NHẬT CẤU TRÚC FILE KHI CẦN
+        // LÀM TƯƠI VÀ ĐỒNG BỘ TRẠNG THÁI CHECKBOX
         async function refreshWorkspace() {
             if (!directoryHandle) return;
-            // Lưu lại trạng thái check để tránh bị reset UI khi refresh
             const checkedStates = {};
             Object.keys(virtualDOM).forEach(k => { checkedStates[k] = virtualDOM[k].isChecked; });
 
             document.getElementById('tree-view').innerHTML = '';
-            await scanDirectory(directoryHandle, document.getElementById('tree-view'), checkedStates);
+            await scanDirectory(directoryHandle, document.getElementById('tree-view'), checkedStates, "");
             renderTabs();
-            document.getElementById('kei-status').innerText = "Đã làm tươi cấu trúc Workspace!";
         }
 
-        async function scanDirectory(dirHandle, parentElement, checkedStates = {}) {
+        // QUÉT ĐỆ QUY + TÍCH HỢP BỘ ĐIỀU KHIỂN CẤU TRÚC FILE (TẠO/XÓA)
+        async function scanDirectory(dirHandle, parentElement, checkedStates = {}, relativePath = "") {
             for await (const entry of dirHandle.values()) {
                 const node = document.createElement('div');
                 node.className = 'tree-node';
+                const currentPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
 
                 if (entry.kind === 'file') {
-                    const wasChecked = checkedStates[entry.name] || false;
+                    const wasChecked = checkedStates[currentPath] || false;
                     node.innerHTML = `
-                        <label class="file-item">
-                            <input type="checkbox" class="file-filter" data-name="${entry.name}" ${wasChecked ? 'checked' : ''}>
-                            <span>📄 ${entry.name}</span>
-                        </label>
+                        <div class="file-item">
+                            <label class="file-label">
+                                <input type="checkbox" class="file-filter" data-path="${currentPath}" ${wasChecked ? 'checked' : ''}>
+                                <span>📄 ${entry.name}</span>
+                            </label>
+                            <div class="node-actions">
+                                <span class="action-icon delete-icon" title="Xóa file">🗑️</span>
+                            </div>
+                        </div>
                     `;
                     
-                    const file = await entry.getFile();
-                    const content = await file.text();
-                    
-                    virtualDOM[entry.name] = {
-                        handle: entry,
-                        content: content,
-                        isChecked: wasChecked
-                    };
+                    // Nạp ngầm dữ liệu vào cấu trúc DOM phục vụ bộ não AI
+                    if (!virtualDOM[currentPath] || !isTyping) {
+                        const file = await entry.getFile();
+                        const content = await file.text();
+                        virtualDOM[currentPath] = {
+                            handle: entry,
+                            parentHandle: dirHandle,
+                            content: content,
+                            isChecked: wasChecked
+                        };
+                    }
 
                     const checkbox = node.querySelector('.file-filter');
                     checkbox.addEventListener('change', (e) => {
-                        virtualDOM[entry.name].isChecked = e.target.checked;
+                        virtualDOM[currentPath].isChecked = e.target.checked;
                         renderTabs();
                     });
 
                     node.querySelector('span').addEventListener('click', () => {
-                        if(virtualDOM[entry.name].isChecked) {
-                            switchToFile(entry.name);
+                        if(virtualDOM[currentPath].isChecked) switchToFile(currentPath);
+                    });
+
+                    // Sự kiện xóa file trực tiếp từ Web
+                    node.querySelector('.delete-icon').addEventListener('click', async () => {
+                        if (confirm(`Xóa vĩnh viễn file ${entry.name} dưới máy local?`)) {
+                            await dirHandle.removeEntry(entry.name);
+                            delete virtualDOM[currentPath];
+                            await refreshWorkspace();
                         }
                     });
 
                 } else if (entry.kind === 'directory') {
-                    node.innerHTML = `📁 <strong>${entry.name}</strong>`;
+                    node.innerHTML = `
+                        <div class="folder-header">
+                            <span>📁 <strong>${entry.name}</strong></span>
+                            <div class="node-actions">
+                                <span class="action-icon add-file" title="Tạo file trong thư mục này">+📄</span>
+                                <span class="action-icon add-folder" title="Tạo folder trong thư mục này">+📁</span>
+                                <span class="action-icon delete-icon" title="Xóa folder">🗑️</span>
+                            </div>
+                        </div>
+                    `;
                     const childContainer = document.createElement('div');
                     node.appendChild(childContainer);
-                    await scanDirectory(entry, childContainer, checkedStates);
+
+                    // Gắn sự kiện quản trị cấu trúc cho Thư mục con
+                    node.querySelector('.add-file').addEventListener('click', (e) => { e.stopPropagation(); createNewNode(entry, 'file'); });
+                    node.querySelector('.add-folder').addEventListener('click', (e) => { e.stopPropagation(); createNewNode(entry, 'dir'); });
+                    node.querySelector('.delete-icon').addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        if (confirm(`Xóa toàn bộ thư mục ${entry.name} và các file bên trong?`)) {
+                            await dirHandle.removeEntry(entry.name, { recursive: true });
+                            await refreshWorkspace();
+                        }
+                    });
+
+                    await scanDirectory(entry, childContainer, checkedStates, currentPath);
                 }
                 parentElement.appendChild(node);
             }
         }
 
+        // HÀM TẠO FILE/THƯ MỤC MỚI TINH TRÊN WEB ĐẨY XUẤT XUỐNG LOCAL
+        async function createNewNode(parentHandle, type) {
+            if (!parentHandle) return alert("Vui lòng mở thư mục dự án trước!");
+            const name = prompt(`Nhập tên ${type === 'file' ? 'file mới (kèm đuôi)' : 'thư mục mới'}:`);
+            if (!name) return;
+            try {
+                if (type === 'file') {
+                    await parentHandle.getFileHandle(name, { create: true });
+                } else {
+                    await parentHandle.getDirectoryHandle(name, { create: true });
+                }
+                document.getElementById('kei-status').innerText = `Đã tạo thành công cấu trúc: ${name}`;
+                await refreshWorkspace();
+            } catch (err) {
+                console.error("Lỗi cấu trúc:", err);
+            }
+        }
+
+        // RENDER TABS QUẢN LÝ CÔ LẬP GIAO DIỆN (#6)
         function renderTabs() {
             const tabBar = document.getElementById('tab-bar');
             tabBar.innerHTML = '';
-            Object.keys(virtualDOM).forEach(fileName => {
-                if (virtualDOM[fileName].isChecked) {
+            Object.keys(virtualDOM).forEach(path => {
+                if (virtualDOM[path].isChecked) {
                     const tab = document.createElement('div');
-                    tab.className = `tab ${currentOpenedFile === fileName ? 'active' : ''}`;
-                    tab.innerHTML = `<span>${fileName}</span>`;
-                    tab.addEventListener('click', () => switchToFile(fileName));
+                    tab.className = `tab ${currentOpenedFile === path ? 'active' : ''}`;
+                    tab.innerHTML = `<span>${path.split('/').pop()}</span>`;
+                    tab.addEventListener('click', () => switchToFile(path));
                     tabBar.appendChild(tab);
                 }
             });
@@ -177,74 +253,92 @@
             }
         }
 
-        function switchToFile(fileName) {
-            currentOpenedFile = fileName;
-            document.getElementById('code-blackboard').value = virtualDOM[fileName].content;
+        function switchToFile(path) {
+            currentOpenedFile = path;
+            document.getElementById('code-blackboard').value = virtualDOM[path].content;
             renderTabs();
         }
 
-        // KỸ THUẬT GIẢM CHẤN (DEBOUNCE) - GIẢI QUYẾT TRIỆT ĐỂ VẤN ĐỀ 2 (ĐƠ/NGHẼN MẠCH)
-        document.getElementById('code-blackboard').addEventListener('input', (e) => {
+        // THEO DÕI HÀNH VI CON TRỎ CHUỘT ĐỂ KHÓA LUỒNG XUNG ĐỘT (#4, #26)
+        const blackboard = document.getElementById('code-blackboard');
+        blackboard.addEventListener('focus', () => { isFocused = true; });
+        blackboard.addEventListener('blur', () => { isFocused = false; });
+
+        // CƠ CHẾ GIẢM CHẤN GHI ĐĨA (DEBOUNCE 300MS TỐI ƯU HÓA)
+        blackboard.addEventListener('input', (e) => {
             if (!currentOpenedFile) return;
-            isTyping = true; // Bật cờ chặn nạp đè từ hệ thống local lên web khi đang gõ
+            isTyping = true;
             virtualDOM[currentOpenedFile].content = e.target.value;
 
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(async () => {
                 await saveFileToLocal(currentOpenedFile, e.target.value);
-                isTyping = false; // Ghi xong file, mở khóa luồng dữ liệu
-            }, 500); // Chờ 500ms sau khi dừng gõ mới thực hiện ghi đĩa I/O
+                isTyping = false;
+            }, 300); 
         });
 
-        async function saveFileToLocal(fileName, content) {
+        async function saveFileToLocal(path, content) {
             try {
-                const fileData = virtualDOM[fileName];
+                const fileData = virtualDOM[path];
                 if (fileData && fileData.handle) {
                     const writable = await fileData.handle.createWritable();
                     await writable.write(content);
                     await writable.close();
                 }
             } catch (err) {
-                console.error("Lỗi ghi đè file local:", err);
+                console.error("Lỗi ghi file:", err);
             }
         }
 
-        // BỘ GIÁM SÁT NGẦM (POLLING WATCHER) - GIẢI QUYẾT TRIỆT ĐỂ VẤN ĐỀ 3 CHÍ MẠNG (#3)
-        function startBackgroundWatcher() {
+        // BỘ ĐÔI MẮT THẦN QUÉT NGẦM (POLLING WATCHERS) - GIẢI QUYẾT TRIỆT ĐỂ LỖI CON TRỎ
+        function startBackgroundWatchers() {
+            // Mắt thần 1: Quét ngầm nội dung file hiện tại (Tần suất 1.5 giây, chỉ chạy khi Hiro KHÔNG focus gõ code) 
             setInterval(async () => {
-                // Nếu Hiro đang bận gõ code hoặc chưa mở file nào thì bỏ qua quét ngược để tránh xung đột
-                if (isTyping || !currentOpenedFile || !virtualDOM[currentOpenedFile]) return;
-
+                if (isFocused || isTyping || !currentOpenedFile || !virtualDOM[currentOpenedFile]) return; [cite: 25]
                 try {
                     const fileHandle = virtualDOM[currentOpenedFile].handle;
                     const file = await fileHandle.getFile();
                     const latestContent = await file.text();
 
-                    // Nếu phát hiện nội dung dưới VS Code khác với nội dung trên bảng đen hiện tại
                     if (latestContent !== virtualDOM[currentOpenedFile].content) {
+                        // CHỤP LẠI TỌA ĐỘ VỊ TRÍ CON TRỎ TRƯỚC KHI NẠP ĐÈ 
+                        const start = blackboard.selectionStart;
+                        const end = blackboard.selectionEnd;
+
                         virtualDOM[currentOpenedFile].content = latestContent;
-                        document.getElementById('code-blackboard').value = latestContent;
-                        console.log(`Đã tự động kéo code mới của file ${currentOpenedFile} từ VS Code lên Web!`);
+                        blackboard.value = latestContent;
+
+                        // KHÔI PHỤC NGAY VỊ TRÍ CON TRỎ CHUỘT - TRIỆT TIÊU HOÀN TOÀN LỖI NHẢY CON TRỎ 
+                        blackboard.setSelectionRange(start, end);
+                        console.log(`Đồng bộ ngầm thành công file: ${currentOpenedFile}`);
                     }
-                } catch (err) {
-                    console.error("Lỗi quét ngầm đồng bộ file:", err);
-                }
-            }, 1000); // Quét ngầm liên tục sau mỗi 1 giây
+                } catch (err) { console.error("Lỗi mắt thần nội dung:", err); }
+            }, 1500);
+
+            // Mắt thần 2: Quét ngầm làm tươi cấu trúc thư mục tự động từ VS Code (Tần suất 4 giây) 
+            setInterval(async () => {
+                if (isFocused || isTyping || !directoryHandle) return;
+                // Chỉ tự quét lại cấu trúc thư mục khi Hiro đang rảnh tay để tránh gián đoạn UI
+                const checkedStates = {};
+                Object.keys(virtualDOM).forEach(k => { checkedStates[k] = virtualDOM[k].isChecked; });
+                document.getElementById('tree-view').innerHTML = '';
+                await scanDirectory(directoryHandle, document.getElementById('tree-view'), checkedStates, "");
+            }, 4000); [cite: 17]
         }
 
-        // TỰ ĐỘNG NHẬN PAYLOAD CODE TỪ KEI (#4)
+        // CỔNG GIAO TIẾP Ý TƯỞNG CỦA KEI ĐẨY LÊN BẢNG ĐEN (#4)
         window.addEventListener('message', function(event) {
             const { action, fileName, suggestedCode } = event.data;
             if (action === 'kei_push_code' && virtualDOM[fileName]) {
-                document.getElementById('code-blackboard').value = suggestedCode;
+                blackboard.value = suggestedCode;
                 document.getElementById('sync-btn').style.display = 'block';
-                document.getElementById('kei-status').innerText = `Kei vừa gợi ý code cho file ${fileName}!`;
+                document.getElementById('kei-status').innerText = `Kei vừa đẩy ý tưởng code vào file ${fileName}!`;
                 
                 document.getElementById('sync-btn').onclick = async function() {
                     virtualDOM[fileName].content = suggestedCode;
                     await saveFileToLocal(fileName, suggestedCode);
                     document.getElementById('sync-btn').style.display = 'none';
-                    document.getElementById('kei-status').innerText = "Đã đồng bộ ý tưởng của Kei xuống VS Code!";
+                    document.getElementById('kei-status').innerText = "Đã đồng bộ ý tưởng của Kei xuống đĩa cứng!";
                     switchToFile(fileName);
                 };
             }
