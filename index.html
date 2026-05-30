@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kei & Hiro Autonomous IDE - V3</title>
+    <title>Kei & Hiro Autonomous IDE - V3.1</title>
     <style>
         :root {
             --bg-color: #1e1e1e;
@@ -106,7 +106,7 @@
         let directoryHandle = null;
         let currentOpenedFile = null;
         
-        // HỆ THỐNG CỜ KHÓA LUỒNG THÔNG MINH - TRIỆT TIÊU LỖI CON TRỎ VÀ RELOAD QUÁ KHỨ (#4, #6)
+        // HỆ THỐNG CỜ KHÓA LUỒNG THÔNG MINH - TRIỆT TIÊU LỖI CON TRỎ VÀ RELOAD QUÁ KHỨ
         let isFocused = false; 
         let isTyping = false;
         let debounceTimer = null;
@@ -114,10 +114,15 @@
         async function connectWorkspace() {
             try {
                 directoryHandle = await window.showDirectoryPicker();
+                // Nạp cấu trúc dự án hoàn chỉnh lên UI trước
                 await refreshWorkspace();
-                startBackgroundWatchers(); // Bật bộ đôi mắt thần quét ngầm cấu trúc và nội dung
+                document.getElementById('kei-status').innerText = "Đã nạp xong cấu trúc dự án!";
+                
+                // Sau khi nạp xong hoàn toàn mới kích hoạt bộ đôi mắt thần ngầm chạy sau
+                startBackgroundWatchers(); 
             } catch (err) {
                 console.error("Workspace access denied", err);
+                alert("Vui lòng cấp quyền truy cập thư mục để kích hoạt IDE!");
             }
         }
 
@@ -127,8 +132,10 @@
             const checkedStates = {};
             Object.keys(virtualDOM).forEach(k => { checkedStates[k] = virtualDOM[k].isChecked; });
 
-            document.getElementById('tree-view').innerHTML = '';
-            await scanDirectory(directoryHandle, document.getElementById('tree-view'), checkedStates, "");
+            // Chỉ xóa trắng hiển thị cây thư mục để render lại, tránh đụng vào luồng dữ liệu thô
+            const treeView = document.getElementById('tree-view');
+            treeView.innerHTML = '';
+            await scanDirectory(directoryHandle, treeView, checkedStates, "");
             renderTabs();
         }
 
@@ -153,16 +160,20 @@
                         </div>
                     `;
                     
-                    // Nạp ngầm dữ liệu vào cấu trúc DOM phục vụ bộ não AI
+                    // Chỉ nạp nội dung file nếu nó chưa có trong virtualDOM hoặc Hiro không trong luồng gõ code
                     if (!virtualDOM[currentPath] || !isTyping) {
-                        const file = await entry.getFile();
-                        const content = await file.text();
-                        virtualDOM[currentPath] = {
-                            handle: entry,
-                            parentHandle: dirHandle,
-                            content: content,
-                            isChecked: wasChecked
-                        };
+                        try {
+                            const file = await entry.getFile();
+                            const content = await file.text();
+                            virtualDOM[currentPath] = {
+                                handle: entry,
+                                parentHandle: dirHandle,
+                                content: content,
+                                isChecked: wasChecked
+                            };
+                        } catch (e) {
+                            console.warn("Chưa đọc được file: " + currentPath);
+                        }
                     }
 
                     const checkbox = node.querySelector('.file-filter');
@@ -175,8 +186,8 @@
                         if(virtualDOM[currentPath].isChecked) switchToFile(currentPath);
                     });
 
-                    // Sự kiện xóa file trực tiếp từ Web
-                    node.querySelector('.delete-icon').addEventListener('click', async () => {
+                    node.querySelector('.delete-icon').addEventListener('click', async (e) => {
+                        e.stopPropagation();
                         if (confirm(`Xóa vĩnh viễn file ${entry.name} dưới máy local?`)) {
                             await dirHandle.removeEntry(entry.name);
                             delete virtualDOM[currentPath];
@@ -198,7 +209,6 @@
                     const childContainer = document.createElement('div');
                     node.appendChild(childContainer);
 
-                    // Gắn sự kiện quản trị cấu trúc cho Thư mục con
                     node.querySelector('.add-file').addEventListener('click', (e) => { e.stopPropagation(); createNewNode(entry, 'file'); });
                     node.querySelector('.add-folder').addEventListener('click', (e) => { e.stopPropagation(); createNewNode(entry, 'dir'); });
                     node.querySelector('.delete-icon').addEventListener('click', async (e) => {
@@ -226,14 +236,14 @@
                 } else {
                     await parentHandle.getDirectoryHandle(name, { create: true });
                 }
-                document.getElementById('kei-status').innerText = `Đã tạo thành công cấu trúc: ${name}`;
+                document.getElementById('kei-status').innerText = `Đã tạo thành công: ${name}`;
                 await refreshWorkspace();
             } catch (err) {
                 console.error("Lỗi cấu trúc:", err);
             }
         }
 
-        // RENDER TABS QUẢN LÝ CÔ LẬP GIAO DIỆN (#6)
+        // RENDER TABS QUẢN LÝ CÔ LẬP GIAO DIỆN
         function renderTabs() {
             const tabBar = document.getElementById('tab-bar');
             tabBar.innerHTML = '';
@@ -259,7 +269,7 @@
             renderTabs();
         }
 
-        // THEO DÕI HÀNH VI CON TRỎ CHUỘT ĐỂ KHÓA LUỒNG XUNG ĐỘT (#4, #26)
+        // THEO DÕI HÀNH VI CON TRỎ CHUỘT ĐỂ KHÓA LUỒNG XUNG ĐỘT
         const blackboard = document.getElementById('code-blackboard');
         blackboard.addEventListener('focus', () => { isFocused = true; });
         blackboard.addEventListener('blur', () => { isFocused = false; });
@@ -290,43 +300,48 @@
             }
         }
 
-        // BỘ ĐÔI MẮT THẦN QUÉT NGẦM (POLLING WATCHERS) - GIẢI QUYẾT TRIỆT ĐỂ LỖI CON TRỎ
+        // BỘ ĐÔI MẮT THẦN QUÉT NGẦM (POLLING WATCHERS) - TRIỆT TIÊU HOÀN TOÀN LỖI CON TRỎ
         function startBackgroundWatchers() {
-            // Mắt thần 1: Quét ngầm nội dung file hiện tại (Tần suất 1.5 giây, chỉ chạy khi Hiro KHÔNG focus gõ code) 
+            // Mắt thần 1: Quét ngầm nội dung file hiện tại (Tần suất 1.5 giây, chỉ chạy khi Hiro KHÔNG focus gõ code)
             setInterval(async () => {
-                if (isFocused || isTyping || !currentOpenedFile || !virtualDOM[currentOpenedFile]) return; [cite: 25]
+                if (isFocused || isTyping || !currentOpenedFile || !virtualDOM[currentOpenedFile]) return;
                 try {
                     const fileHandle = virtualDOM[currentOpenedFile].handle;
                     const file = await fileHandle.getFile();
                     const latestContent = await file.text();
 
                     if (latestContent !== virtualDOM[currentOpenedFile].content) {
-                        // CHỤP LẠI TỌA ĐỘ VỊ TRÍ CON TRỎ TRƯỚC KHI NẠP ĐÈ 
+                        // CHỤP LẠI TỌA ĐỘ VỊ TRÍ CON TRỎ TRƯỚC KHI NẠP ĐÈ
                         const start = blackboard.selectionStart;
                         const end = blackboard.selectionEnd;
 
                         virtualDOM[currentOpenedFile].content = latestContent;
                         blackboard.value = latestContent;
 
-                        // KHÔI PHỤC NGAY VỊ TRÍ CON TRỎ CHUỘT - TRIỆT TIÊU HOÀN TOÀN LỖI NHẢY CON TRỎ 
+                        // KHÔI PHỤC NGAY VỊ TRÍ CON TRỎ CHUỘT
                         blackboard.setSelectionRange(start, end);
                         console.log(`Đồng bộ ngầm thành công file: ${currentOpenedFile}`);
                     }
                 } catch (err) { console.error("Lỗi mắt thần nội dung:", err); }
             }, 1500);
 
-            // Mắt thần 2: Quét ngầm làm tươi cấu trúc thư mục tự động từ VS Code (Tần suất 4 giây) 
+            // Mắt thần 2: Quét ngầm làm tươi cấu trúc thư mục tự động từ VS Code (Tần suất 4 giây)
             setInterval(async () => {
+                // Chỉ quét cấu trúc khi Hiro hoàn toàn rảnh tay để tránh gián đoạn trải nghiệm UI
                 if (isFocused || isTyping || !directoryHandle) return;
-                // Chỉ tự quét lại cấu trúc thư mục khi Hiro đang rảnh tay để tránh gián đoạn UI
+                
                 const checkedStates = {};
                 Object.keys(virtualDOM).forEach(k => { checkedStates[k] = virtualDOM[k].isChecked; });
-                document.getElementById('tree-view').innerHTML = '';
-                await scanDirectory(directoryHandle, document.getElementById('tree-view'), checkedStates, "");
-            }, 4000); [cite: 17]
+                
+                const treeView = document.getElementById('tree-view');
+                if (treeView) {
+                    treeView.innerHTML = '';
+                    await scanDirectory(directoryHandle, treeView, checkedStates, "");
+                }
+            }, 4000);
         }
 
-        // CỔNG GIAO TIẾP Ý TƯỞNG CỦA KEI ĐẨY LÊN BẢNG ĐEN (#4)
+        // CỔNG GIAO TIẾP Ý TƯỞNG CỦA KEI ĐẨY LÊN BẢNG ĐEN
         window.addEventListener('message', function(event) {
             const { action, fileName, suggestedCode } = event.data;
             if (action === 'kei_push_code' && virtualDOM[fileName]) {
