@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kei & Hiro Workspace IDE</title>
+    <title>Kei & Hiro Workspace IDE - V2</title>
     <style>
         :root {
             --bg-color: #1e1e1e;
@@ -23,7 +23,6 @@
             height: 100vh;
             overflow: hidden;
         }
-        /* Sidebar chứa cấu trúc thư mục (#2) */
         #sidebar {
             width: 250px;
             background-color: var(--sidebar-bg);
@@ -33,158 +32,116 @@
             padding: 10px;
             box-sizing: border-box;
         }
-        #workspace-btn {
+        .btn-group { display: flex; gap: 5px; margin-bottom: 10px; }
+        #workspace-btn, #refresh-btn {
             background-color: var(--button-bg);
             color: white;
             border: none;
             padding: 8px;
             cursor: pointer;
-            margin-bottom: 10px;
             font-weight: bold;
             border-radius: 4px;
-        }
-        #tree-view {
             flex: 1;
-            overflow-y: auto;
-            font-size: 14px;
         }
-        .tree-node { margin-left: 15px; margin-y: 4px; }
+        #refresh-btn { background-color: #555; }
+        #tree-view { flex: 1; overflow-y: auto; font-size: 14px; }
+        .tree-node { margin-left: 15px; margin-top: 4px; margin-bottom: 4px; }
         .file-item { display: flex; align-items: center; gap: 5px; cursor: pointer; }
-        
-        /* Khu vực chính: Tab (#6) & Bảng đen */
-        #main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-        #tab-bar {
-            display: flex;
-            background-color: var(--tab-bg);
-            overflow-x: auto;
-            border-bottom: 1px solid #3c3c3c;
-        }
-        .tab {
-            padding: 8px 16px;
-            background-color: var(--tab-bg);
-            border-right: 1px solid #3c3c3c;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+        #main-content { flex: 1; display: flex; flex-direction: column; }
+        #tab-bar { display: flex; background-color: var(--tab-bg); overflow-x: auto; border-bottom: 1px solid #3c3c3c; }
+        .tab { padding: 8px 16px; background-color: var(--tab-bg); border-right: 1px solid #3c3c3c; cursor: pointer; display: flex; align-items: center; gap: 8px; }
         .tab.active { background-color: var(--tab-active); border-bottom: 2px solid var(--accent-color); }
-        
-        /* Bảng đen sửa code (#4) */
         #editor-container { flex: 1; position: relative; }
         #code-blackboard {
-            width: 100%;
-            height: 100%;
-            background-color: var(--bg-color);
-            color: #d4d4d4;
-            font-family: 'Consolas', monospace;
-            font-size: 16px;
-            border: none;
-            padding: 15px;
-            box-sizing: border-box;
-            resize: none;
-            outline: none;
+            width: 100%; height: 100%; background-color: var(--bg-color); color: #d4d4d4;
+            font-family: 'Consolas', monospace; font-size: 16px; border: none; padding: 15px;
+            box-sizing: border-box; resize: none; outline: none;
         }
-        
-        /* Nút duyệt và can thiệp của Kei (#4) */
-        #action-bar {
-            padding: 10px;
-            background-color: var(--sidebar-bg);
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            border-top: 1px solid #3c3c3c;
-        }
-        .btn {
-            padding: 6px 12px;
-            border: none;
-            cursor: pointer;
-            border-radius: 3px;
-            font-weight: bold;
-        }
+        #action-bar { padding: 10px; background-color: var(--sidebar-bg); display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #3c3c3c; }
+        .btn { padding: 6px 12px; border: none; cursor: pointer; border-radius: 3px; font-weight: bold; }
         #sync-btn { background-color: #28a745; color: white; display: none; }
     </style>
 </head>
 <body>
 
-    <!-- SIDEBAR: Quản lý thư mục (#2, #5) và bộ lọc (#1) -->
     <div id="sidebar">
-        <button id="workspace-btn" onclick="connectWorkspace()">Mở Thư Mục Dự Án</button>
+        <div class="btn-group">
+            <button id="workspace-btn" onclick="connectWorkspace()">Mở Dự Án</button>
+            <button id="refresh-btn" onclick="refreshWorkspace()">🔄 Làm Tươi</button>
+        </div>
         <div id="tree-view"></div>
     </div>
 
-    <!-- MAIN CONTENT: Không gian làm việc tối giản (#6) -->
     <div id="main-content">
-        <!-- Thanh Tab điều hướng (#6) -->
         <div id="tab-bar"></div>
-        
-        <!-- Bảng đen hiển thị & Sửa code (#4) -->
         <div id="editor-container">
-            <textarea id="code-blackboard" placeholder="// Chọn file từ cây thư mục hoặc đợi Kei truyền code vào đây..."></textarea>
+            <textarea id="code-blackboard" placeholder="// Chọn file hoặc đợi Kei truyền code vào đây..."></textarea>
         </div>
-        
-        <!-- Thanh công cụ duyệt code (#4) -->
         <div id="action-bar">
-            <span id="kei-status" style="margin-right: auto; color: #858585; font-size: 14px; align-self: center;">Kei đang lắng nghe...</span>
-            <button id="sync-btn" class="btn" onclick="approveKeiCode()">✓ Đồng ý áp dụng xuống VS Code</button>
+            <span id="kei-status" style="margin-right: auto; color: #858585; font-size: 14px; align-self: center;">Kei đang theo dõi...</span>
+            <button id="sync-btn" class="btn">✓ Đồng ý áp dụng xuống VS Code</button>
         </div>
     </div>
 
     <script>
-        // TẦNG DOM: Lưu trữ trạng thái ngầm toàn bộ file để Kei (AI) đọc hiểu ngữ cảnh (#6)
         let virtualDOM = {}; 
         let directoryHandle = null;
         let currentOpenedFile = null;
+        let isTyping = false; // Cờ chặn không cho nạp đè khi Hiro đang gõ code
+        let debounceTimer = null;
 
-        // KẾT NỐI WORKSPACE VÀ QUÉT ĐỆ QUY NẠP THƯ MỤC (#5)
         async function connectWorkspace() {
             try {
                 directoryHandle = await window.showDirectoryPicker();
-                virtualDOM = {};
-                document.getElementById('tree-view').innerHTML = '';
-                await scanDirectory(directoryHandle, document.getElementById('tree-view'));
-                document.getElementById('kei-status').innerText = "Đã kết nối Workspace của Hiro!";
+                await refreshWorkspace();
+                startBackgroundWatcher(); // Kích hoạt bộ giám sát ngầm dữ liệu chống sụp đổ
             } catch (err) {
                 console.error("Workspace access denied", err);
             }
         }
 
-        // DUYỆT ĐỆ QUY ĐỂ DỰNG TREE-VIEW VÀ NẠP NGUỒN VÀO DOM (#2, #5)
-        async function scanDirectory(dirHandle, parentElement) {
+        // TỰ ĐỘNG CẬP NHẬT CẤU TRÚC FILE KHI CẦN
+        async function refreshWorkspace() {
+            if (!directoryHandle) return;
+            // Lưu lại trạng thái check để tránh bị reset UI khi refresh
+            const checkedStates = {};
+            Object.keys(virtualDOM).forEach(k => { checkedStates[k] = virtualDOM[k].isChecked; });
+
+            document.getElementById('tree-view').innerHTML = '';
+            await scanDirectory(directoryHandle, document.getElementById('tree-view'), checkedStates);
+            renderTabs();
+            document.getElementById('kei-status').innerText = "Đã làm tươi cấu trúc Workspace!";
+        }
+
+        async function scanDirectory(dirHandle, parentElement, checkedStates = {}) {
             for await (const entry of dirHandle.values()) {
                 const node = document.createElement('div');
                 node.className = 'tree-node';
 
                 if (entry.kind === 'file') {
-                    // Bộ lọc Checkbox chọn file (#1) và Tách biệt UI/DOM (#6)
+                    const wasChecked = checkedStates[entry.name] || false;
                     node.innerHTML = `
                         <label class="file-item">
-                            <input type="checkbox" class="file-filter" data-name="${entry.name}">
+                            <input type="checkbox" class="file-filter" data-name="${entry.name}" ${wasChecked ? 'checked' : ''}>
                             <span>📄 ${entry.name}</span>
                         </label>
                     `;
                     
-                    // Đọc file nạp ngầm vào hệ thống dữ liệu (DOM) để AI xử lý ngữ cảnh
                     const file = await entry.getFile();
                     const content = await file.text();
+                    
                     virtualDOM[entry.name] = {
                         handle: entry,
                         content: content,
-                        isChecked: false
+                        isChecked: wasChecked
                     };
 
-                    // Lắng nghe sự kiện check hiển thị file (#1)
                     const checkbox = node.querySelector('.file-filter');
                     checkbox.addEventListener('change', (e) => {
                         virtualDOM[entry.name].isChecked = e.target.checked;
                         renderTabs();
                     });
 
-                    // Click tên file để mở tab hiển thị (#6)
                     node.querySelector('span').addEventListener('click', () => {
                         if(virtualDOM[entry.name].isChecked) {
                             switchToFile(entry.name);
@@ -192,21 +149,18 @@
                     });
 
                 } else if (entry.kind === 'directory') {
-                    // Quét thư mục con đệ quy (#2, #5)
                     node.innerHTML = `📁 <strong>${entry.name}</strong>`;
                     const childContainer = document.createElement('div');
                     node.appendChild(childContainer);
-                    await scanDirectory(entry, childContainer);
+                    await scanDirectory(entry, childContainer, checkedStates);
                 }
                 parentElement.appendChild(node);
             }
         }
 
-        // RENDER THANH TAB QUẢN LÝ TIỆN MẮT (#6)
         function renderTabs() {
             const tabBar = document.getElementById('tab-bar');
             tabBar.innerHTML = '';
-            
             Object.keys(virtualDOM).forEach(fileName => {
                 if (virtualDOM[fileName].isChecked) {
                     const tab = document.createElement('div');
@@ -216,8 +170,6 @@
                     tabBar.appendChild(tab);
                 }
             });
-
-            // Nếu file đang mở bị bỏ check, chuyển sang file khác hoặc xóa bảng đen
             if (currentOpenedFile && !virtualDOM[currentOpenedFile].isChecked) {
                 currentOpenedFile = Object.keys(virtualDOM).find(k => virtualDOM[k].isChecked) || null;
                 if (currentOpenedFile) switchToFile(currentOpenedFile);
@@ -225,22 +177,25 @@
             }
         }
 
-        // CHUYỂN ĐỔI HIỂN THỊ FILE TOÀN DIỆN TRÊN BẢNG ĐEN (#6)
         function switchToFile(fileName) {
             currentOpenedFile = fileName;
             document.getElementById('code-blackboard').value = virtualDOM[fileName].content;
             renderTabs();
         }
 
-        // LẮNG NGHE SỰ KIỆN HIRO TỰ SỬA CODE TRÊN BẢNG ĐEN VÀ LƯU NGƯỢC XUỐNG MÁY (#4)
-        document.getElementById('code-blackboard').addEventListener('input', async (e) => {
-            if (currentOpenedFile && virtualDOM[currentOpenedFile]) {
-                virtualDOM[currentOpenedFile].content = e.target.value;
+        // KỸ THUẬT GIẢM CHẤN (DEBOUNCE) - GIẢI QUYẾT TRIỆT ĐỂ VẤN ĐỀ 2 (ĐƠ/NGHẼN MẠCH)
+        document.getElementById('code-blackboard').addEventListener('input', (e) => {
+            if (!currentOpenedFile) return;
+            isTyping = true; // Bật cờ chặn nạp đè từ hệ thống local lên web khi đang gõ
+            virtualDOM[currentOpenedFile].content = e.target.value;
+
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(async () => {
                 await saveFileToLocal(currentOpenedFile, e.target.value);
-            }
+                isTyping = false; // Ghi xong file, mở khóa luồng dữ liệu
+            }, 500); // Chờ 500ms sau khi dừng gõ mới thực hiện ghi đĩa I/O
         });
 
-        // HÀM GHI ĐÈ FILE XUỐNG WORKSPACE LOCAL (#4)
         async function saveFileToLocal(fileName, content) {
             try {
                 const fileData = virtualDOM[fileName];
@@ -248,24 +203,43 @@
                     const writable = await fileData.handle.createWritable();
                     await writable.write(content);
                     await writable.close();
-                    console.log(`Saved ${fileName} to local workspace.`);
                 }
             } catch (err) {
-                console.error("Không thể ghi đè file xuống máy local", err);
+                console.error("Lỗi ghi đè file local:", err);
             }
         }
 
-        // API CỔNG NHẬN Ý TƯỞNG CỦA KEI ĐẨY LÊN BẢNG ĐEN KHÔNG CẦN COPY-PASTE (#4)
+        // BỘ GIÁM SÁT NGẦM (POLLING WATCHER) - GIẢI QUYẾT TRIỆT ĐỂ VẤN ĐỀ 3 CHÍ MẠNG (#3)
+        function startBackgroundWatcher() {
+            setInterval(async () => {
+                // Nếu Hiro đang bận gõ code hoặc chưa mở file nào thì bỏ qua quét ngược để tránh xung đột
+                if (isTyping || !currentOpenedFile || !virtualDOM[currentOpenedFile]) return;
+
+                try {
+                    const fileHandle = virtualDOM[currentOpenedFile].handle;
+                    const file = await fileHandle.getFile();
+                    const latestContent = await file.text();
+
+                    // Nếu phát hiện nội dung dưới VS Code khác với nội dung trên bảng đen hiện tại
+                    if (latestContent !== virtualDOM[currentOpenedFile].content) {
+                        virtualDOM[currentOpenedFile].content = latestContent;
+                        document.getElementById('code-blackboard').value = latestContent;
+                        console.log(`Đã tự động kéo code mới của file ${currentOpenedFile} từ VS Code lên Web!`);
+                    }
+                } catch (err) {
+                    console.error("Lỗi quét ngầm đồng bộ file:", err);
+                }
+            }, 1000); // Quét ngầm liên tục sau mỗi 1 giây
+        }
+
+        // TỰ ĐỘNG NHẬN PAYLOAD CODE TỪ KEI (#4)
         window.addEventListener('message', function(event) {
-            // Nhận payload dữ liệu từ bộ não AI của Kei truyền qua cửa sổ ngữ cảnh
             const { action, fileName, suggestedCode } = event.data;
             if (action === 'kei_push_code' && virtualDOM[fileName]) {
-                // Đưa code của Kei lên bảng đen và bật nút duyệt
                 document.getElementById('code-blackboard').value = suggestedCode;
                 document.getElementById('sync-btn').style.display = 'block';
                 document.getElementById('kei-status').innerText = `Kei vừa gợi ý code cho file ${fileName}!`;
                 
-                // Lưu tạm vào bộ nhớ chờ Hiro ấn duyệt
                 document.getElementById('sync-btn').onclick = async function() {
                     virtualDOM[fileName].content = suggestedCode;
                     await saveFileToLocal(fileName, suggestedCode);
